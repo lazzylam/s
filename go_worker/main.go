@@ -1,35 +1,38 @@
 package main
 
 import (
-    "context"
-    "fmt"
-    "strings"
-    "time"
-    "go.mongodb.org/mongo-driver/mongo"
-    "go.mongodb.org/mongo-driver/mongo/options"
+	"log"
+	"os"
+	"go_antigcast/config"
+	"go_antigcast/handlers"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-var blacklist = []string{"tmo", "vcs"}
-var whitelist = []string{"tmobile"}
-
 func main() {
-    // Simulasi: connect ke Mongo
-    ctx := context.TODO()
-    client, _ := mongo.Connect(ctx, options.Client().ApplyURI("mongodb://localhost:27017"))
-    db := client.Database("anti_gcast")
-    coll := db.Collection("config")
+	mongoURI := os.Getenv("MONGO_URI")
+	dbName := "anti_gcast"
+	collName := "configs"
+	botToken := os.Getenv("BOT_TOKEN")
 
-    // Simulasi: pesan masuk
-    pesanMasuk := "Ayo vcs yuk @cewek"
+	// Inisialisasi MongoDB
+	config.InitMongo(mongoURI, dbName, collName)
 
-    // Simulasi ambil config dari DB
-    chatID := 123456
-    config := getConfigFromMongo(ctx, coll, chatID)
+	// Inisialisasi Telegram Bot
+	bot, err := tgbotapi.NewBotAPI(botToken)
+	if err != nil {
+		log.Fatal("Failed to create bot:", err)
+	}
 
-    if isSuspicious(pesanMasuk, config.Blacklist, config.Whitelist) {
-        fmt.Println("Pesan mencurigakan! Harus dihapus.")
-        // call Telegram API untuk delete
-    } else {
-        fmt.Println("Pesan aman.")
-    }
+	log.Printf("Authorized on account %s", bot.Self.UserName)
+
+	// Mulai polling update
+	u := tgbotapi.NewUpdate(0)
+	u.Timeout = 60
+
+	updates := bot.GetUpdatesChan(u)
+
+	for update := range updates {
+		go handlers.HandleUpdate(bot, update)
+	}
 }
